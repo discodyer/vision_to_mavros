@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   tf
+  tf2
+  tf2_ros
   sensor_msgs
   cv_bridge
   std_msgs
@@ -143,6 +145,11 @@ include_directories(
 ## Specify libraries to link a library or executable target agains
 add_executable(${PROJECT_NAME}_node src/vision_to_mavros.cpp)
 target_link_libraries(${PROJECT_NAME}_node
+  ${catkin_LIBRARIES}
+)
+
+add_executable(mid360_to_mavros_node src/mid360_to_mavros.cpp)
+target_link_libraries(mid360_to_mavros_node
   ${catkin_LIBRARIES}
 )
 
