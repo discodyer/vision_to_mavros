@@ -39,7 +39,7 @@ int main(int argc, char **argv)
   std::string source_frame_id = "camera_init"; // 激光雷达坐标系
 
   double output_rate = 10, roll_lidar = 0.0, pitch_lidar = 0.0, yaw_lidar = 0.0;
-  double x_lidar = 0.0, y_lidar = 0.0, z_lidar = 0.0;
+  double x_lidar = 0.0, y_lidar = 0.0, z_lidar = 0.0, gamma_world = -1.5707963;
 
   // Read parameters from launch file, including: target_frame_id, source_frame_id, output_rate
   {
@@ -132,6 +132,17 @@ int main(int argc, char **argv)
     {
       ROS_WARN("Using default z_lidar: %f", z_lidar);
     }
+
+    // The rotation around z axis between original world frame and target world frame, assuming the z axis needs not to be changed
+    // In this case, target world frame has y forward, x to the right and z upwards (ENU as ROS dictates)
+    if (node.getParam("gamma_world", gamma_world))
+    {
+      ROS_INFO("Get gamma_world parameter: %f", gamma_world);
+    }
+    else
+    {
+      ROS_WARN("Using default gamma_world: %f", gamma_world);
+    }
   }
 
   //////////////////////////////////////////////////
@@ -171,15 +182,20 @@ int main(int argc, char **argv)
         // 进行坐标系变换
         tf2::Vector3 position_body;
         tf2::Vector3 position_orig = transform.getOrigin();
-        position_body.setX(position_orig.getX() + x_lidar);
-        position_body.setY(position_orig.getY() + y_lidar);
+        position_body.setX( cos(gamma_world) * (position_orig.getX() + x_lidar) + sin(gamma_world) * (position_orig.getY() + y_lidar));
+        position_body.setY(-sin(gamma_world) * (position_orig.getX() + x_lidar) + cos(gamma_world) * (position_orig.getY() + y_lidar));
         position_body.setZ(position_orig.getZ() + z_lidar);
 
         // 读取旋转偏移并进行旋转
         tf2::Quaternion quat_lidar = transform.getRotation();
         tf2::Quaternion quat_body;
         quat_body.setRPY(roll_lidar, pitch_lidar, yaw_lidar);
-        quat_body = quat_lidar * quat_body;
+
+        // Rotate body frame 90 degree (align body x with world y at launch)
+        tf2::Quaternion quat_rot_z;
+        quat_rot_z.setRPY(0, 0, -gamma_world);
+
+        quat_body = quat_rot_z * quat_lidar * quat_body;
         
         // 归一化
         quat_body.normalize();

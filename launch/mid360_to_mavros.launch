@@ -47,6 +47,9 @@
     <arg name="z_lidar" default="-0.1" />
     <param name="z_lidar" value="$(arg z_lidar)" />
 
+    <!-- 添加全局旋转参数 -->
+    <arg name="gamma_world" default="-1.5707963" />
+    <param name="gamma_world" value="$(arg gamma_world)" />
 
     <node pkg="vision_to_mavros" type="mid360_to_mavros_node" name="mid360_to_mavros" output="screen" >
         <remap from="mid360_pose" to="/mavros/vision_pose/pose" />
