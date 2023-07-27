@@ -21,7 +21,7 @@ int main(int argc, char **argv)
   //////////////////////////////////////////////////
   // Variables for precision navigation
   //////////////////////////////////////////////////
-  ros::Publisher mid360_pose_publisher = node.advertise<geometry_msgs::PoseStamped>("lidar_pose", 10);
+  ros::Publisher mid360_pose_publisher = node.advertise<geometry_msgs::PoseStamped>("mid360_pose", 10);
 
   ros::Publisher body_path_pubisher = node.advertise<nav_msgs::Path>("body_frame/path", 1);
 
@@ -138,7 +138,7 @@ int main(int argc, char **argv)
   // Wait for the first transform to become available.
   //////////////////////////////////////////////////
   // tf_listener.waitForTransform(target_frame_id, source_frame_id, ros::Time::now(), ros::Duration(3.0));
-  transform_stamped = tf_buffer.lookupTransform(target_frame_id, source_frame_id, ros::Time::now(), ros::Duration(3.0));
+  transform_stamped = tf_buffer.lookupTransform(target_frame_id, source_frame_id, ros::Time(0), ros::Duration(3.0));
 
   ros::Time last_tf_time = ros::Time::now();
 
