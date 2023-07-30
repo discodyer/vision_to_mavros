@@ -3,6 +3,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include "tf2_ros/static_transform_broadcaster.h"
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Path.h>
@@ -25,6 +26,9 @@ int main(int argc, char **argv)
 
   ros::Publisher body_path_pubisher = node.advertise<nav_msgs::Path>("body_frame/path", 1);
 
+  // 创建静态坐标转换广播器
+  tf2_ros::StaticTransformBroadcaster static_tf_broadcaster;
+
   tf2_ros::Buffer tf_buffer;
   tf2_ros::TransformListener tf_listener(tf_buffer);
 
@@ -34,9 +38,11 @@ int main(int argc, char **argv)
 
   nav_msgs::Path body_path;
 
-  std::string target_frame_id = "base_link"; // 底座坐标系
+  std::string target_frame_id = "camera_init"; // 底座坐标系
 
-  std::string source_frame_id = "camera_init"; // 激光雷达坐标系
+  std::string source_frame_id = "body"; // 激光雷达坐标系
+
+  std::string offset_frame_id = "body_offset"; // 修正后的激光雷达坐标系
 
   double output_rate = 10, roll_lidar = 0.0, pitch_lidar = 0.0, yaw_lidar = 0.0;
   double x_lidar = 0.0, y_lidar = 0.0, z_lidar = 0.0, gamma_world = -1.5707963, auto_offset_delay = 2.0;
@@ -169,8 +175,7 @@ int main(int argc, char **argv)
   tf2::Vector3 position_offset;
   tf2::Quaternion quat_offset;
 
-  bool is_get_offset = false;
-
+  // 获取一次偏移量作为全局偏移
   while (node.ok() && auto_offset_delay != 0.0)
   {
     ROS_INFO("Wait %0.1f s to get first offset...", auto_offset_delay);
@@ -183,16 +188,23 @@ int main(int argc, char **argv)
 
       tf2::Transform transform;
       tf2::fromMsg(transform_stamped.transform, transform);
-      position_offset = transform.getOrigin();
-      quat_offset = transform.getRotation();
+      position_offset -= transform.getOrigin();
       ROS_INFO("Got first offset:");
       ROS_INFO("position_offset_x: %f", position_offset.getX());
       ROS_INFO("position_offset_y: %f", position_offset.getY());
       ROS_INFO("position_offset_z: %f", position_offset.getZ());
-      ROS_INFO("quat_offset_x: %f", quat_offset.getX());
-      ROS_INFO("quat_offset_y: %f", quat_offset.getY());
-      ROS_INFO("quat_offset_z: %f", quat_offset.getZ());
-      ROS_INFO("quat_offset_w: %f", quat_offset.getW());
+      transform_stamped.header.frame_id = source_frame_id;
+      transform_stamped.child_frame_id = offset_frame_id;
+      transform_stamped.transform.translation.x = position_offset.getX();
+      transform_stamped.transform.translation.y = position_offset.getY();
+      transform_stamped.transform.translation.z = position_offset.getZ();
+      transform_stamped.transform.rotation.x = 0.0;
+      transform_stamped.transform.rotation.y = 0.0;
+      transform_stamped.transform.rotation.z = 0.0;
+      transform_stamped.transform.rotation.w = 1.0;
+      static_tf_broadcaster.sendTransform(transform_stamped);
+      ROS_INFO("source_frame_id change to: %s", offset_frame_id.c_str());
+      source_frame_id = offset_frame_id;
     }
     ros::spinOnce();
     rate.sleep();
@@ -225,7 +237,7 @@ int main(int argc, char **argv)
         // 进行坐标系变换
         tf2::Vector3 position_body;
         tf2::Vector3 position_orig = transform.getOrigin();
-        position_orig -= position_offset;
+        position_orig += position_offset;
         position_body.setX(cos(gamma_world) * (position_orig.getX() + x_lidar) + sin(gamma_world) * (position_orig.getY() + y_lidar));
         position_body.setY(-sin(gamma_world) * (position_orig.getX() + x_lidar) + cos(gamma_world) * (position_orig.getY() + y_lidar));
         position_body.setZ(position_orig.getZ() + z_lidar);
