@@ -9,23 +9,9 @@
 
     <param name="output_rate"       value="10" />
 
-    <!-- Two steps alignment: 
-    1) r,p,y: align current camera frame with default camera frame (x forward, y left, z up)
-    2) gamma: align default camera frame's x axis with world y axis
-    Frontfacing:
-        Forward, USB port to the right (default): r = 0,          p = 0,          y = 0,  gamma = -1.5707963 
-        Forward, USB port to the left           : r = 3.1415926,  p = 0,          y = 0,  gamma = -1.5707963 
-    Downfacing: you need to tilt the vehicle's nose up a little (not flat) when launch the T265 realsense-ros node, otherwise the initial yaw will be randomized, read here: https://github.com/IntelRealSense/librealsense/issues/4080
-    Tilt the vehicle to any other sides and the yaw might not be as stable.
-        Downfacing, USB port to the right :       r = 0,          p = -1.5707963, y = 0,  gamma = -1.5707963
-        Downfacing, USB port to the left  :       r = 3.1415926,  p = -1.5707963, y = 0,  gamma = -1.5707963
-        Downfacing, USB port to the back  :       r = -1.5707963, p = -1.5707963, y = 0,  gamma = -1.5707963          
-        Downfacing, USB port to the front :       r = 1.5707963,  p = -1.5707963, y = 0,  gamma = -1.5707963
-    -->
-    <!-- <param name="roll_cam"          value="3.1415926" />
-    <param name="pitch_cam"         value="0" />
-    <param name="yaw_cam"           value="0" />
-    <param name="gamma_world"       value="-1.5707963" /> -->
+    <!-- 自动误差修正延时，默认节点启动后2s采集一次误差作为全局误差，设为0.0来禁用误差修正 -->
+    <arg name="auto_offset_delay" default="2.0" />
+    <param name="auto_offset_delay" value="$(arg auto_offset_delay)" />
 
     <!-- 添加旋转参数 -->
     <arg name="roll_lidar" default="0.0" />
@@ -44,7 +30,7 @@
     <arg name="y_lidar" default="0.0" />
     <param name="y_lidar" value="$(arg y_lidar)" />
 
-    <arg name="z_lidar" default="-0.1" />
+    <arg name="z_lidar" default="0.0" />
     <param name="z_lidar" value="$(arg z_lidar)" />
 
     <!-- 添加全局旋转参数 -->

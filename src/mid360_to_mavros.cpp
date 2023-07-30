@@ -39,7 +39,7 @@ int main(int argc, char **argv)
   std::string source_frame_id = "camera_init"; // 激光雷达坐标系
 
   double output_rate = 10, roll_lidar = 0.0, pitch_lidar = 0.0, yaw_lidar = 0.0;
-  double x_lidar = 0.0, y_lidar = 0.0, z_lidar = 0.0, gamma_world = -1.5707963;
+  double x_lidar = 0.0, y_lidar = 0.0, z_lidar = 0.0, gamma_world = -1.5707963, auto_offset_delay = 2.0;
 
   // Read parameters from launch file, including: target_frame_id, source_frame_id, output_rate
   {
@@ -67,6 +67,16 @@ int main(int argc, char **argv)
     if (node.getParam("output_rate", output_rate))
     {
       ROS_INFO("Get output_rate parameter: %f", output_rate);
+    }
+    else
+    {
+      ROS_WARN("Using default output_rate: %f", output_rate);
+    }
+
+    // auto offset delay
+    if (node.getParam("auto_offset_delay", auto_offset_delay))
+    {
+      ROS_INFO("Get auto_offset_delay parameter: %f", auto_offset_delay);
     }
     else
     {
@@ -156,6 +166,39 @@ int main(int argc, char **argv)
   // Limit the rate of publishing data, otherwise the other telemetry port might be flooded
   ros::Rate rate(output_rate);
 
+  tf2::Vector3 position_offset;
+  tf2::Quaternion quat_offset;
+
+  bool is_get_offset = false;
+
+  while (node.ok() && auto_offset_delay != 0.0)
+  {
+    ROS_INFO("Wait %0.1f s to get first offset...", auto_offset_delay);
+    ros::Duration(auto_offset_delay).sleep();
+    transform_stamped = tf_buffer.lookupTransform(target_frame_id, source_frame_id, ros::Time(0), ros::Duration(1.0));
+
+    if (last_tf_time < transform_stamped.header.stamp)
+    {
+      last_tf_time = transform_stamped.header.stamp;
+
+      tf2::Transform transform;
+      tf2::fromMsg(transform_stamped.transform, transform);
+      position_offset = transform.getOrigin();
+      quat_offset = transform.getRotation();
+      ROS_INFO("Got first offset:");
+      ROS_INFO("position_offset_x: %f", position_offset.getX());
+      ROS_INFO("position_offset_y: %f", position_offset.getY());
+      ROS_INFO("position_offset_z: %f", position_offset.getZ());
+      ROS_INFO("quat_offset_x: %f", quat_offset.getX());
+      ROS_INFO("quat_offset_y: %f", quat_offset.getY());
+      ROS_INFO("quat_offset_z: %f", quat_offset.getZ());
+      ROS_INFO("quat_offset_w: %f", quat_offset.getW());
+    }
+    ros::spinOnce();
+    rate.sleep();
+    break;
+  }
+
   while (node.ok())
   {
     // For tf, Time(0) means "the latest available" transform in the buffer.
@@ -168,13 +211,13 @@ int main(int argc, char **argv)
     try
     {
       // 获取变换信息
-      transform_stamped = tf_buffer.lookupTransform(target_frame_id, source_frame_id, now, timeout);      
+      transform_stamped = tf_buffer.lookupTransform(target_frame_id, source_frame_id, now, timeout);
 
       // Only publish pose messages when we have new transform data.
       if (last_tf_time < transform_stamped.header.stamp)
       {
         last_tf_time = transform_stamped.header.stamp;
-        
+
         // 将ROS的geometry_msgs转换为tf2的数据类型
         tf2::Transform transform;
         tf2::fromMsg(transform_stamped.transform, transform);
@@ -182,7 +225,8 @@ int main(int argc, char **argv)
         // 进行坐标系变换
         tf2::Vector3 position_body;
         tf2::Vector3 position_orig = transform.getOrigin();
-        position_body.setX( cos(gamma_world) * (position_orig.getX() + x_lidar) + sin(gamma_world) * (position_orig.getY() + y_lidar));
+        position_orig -= position_offset;
+        position_body.setX(cos(gamma_world) * (position_orig.getX() + x_lidar) + sin(gamma_world) * (position_orig.getY() + y_lidar));
         position_body.setY(-sin(gamma_world) * (position_orig.getX() + x_lidar) + cos(gamma_world) * (position_orig.getY() + y_lidar));
         position_body.setZ(position_orig.getZ() + z_lidar);
 
@@ -196,7 +240,7 @@ int main(int argc, char **argv)
         quat_rot_z.setRPY(0, 0, -gamma_world);
 
         quat_body = quat_rot_z * quat_lidar * quat_body;
-        
+
         // 归一化
         quat_body.normalize();
 
@@ -221,7 +265,7 @@ int main(int argc, char **argv)
         body_path_pubisher.publish(body_path);
       }
     }
-    catch (tf2::TransformException& ex)
+    catch (tf2::TransformException &ex)
     {
       ROS_WARN("Failed to lookup transform: %s", ex.what());
       ros::Duration(1.0).sleep();
